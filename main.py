@@ -3,14 +3,14 @@
     Python script to track new data and auto tweet on Twitter from
         https://data.nashville.gov
 """
+import requests
+import tweepy
+import gspread
 
 from os import environ
 from time import sleep
 from datetime import datetime as dt
 
-import requests
-import tweepy
-import gspread
 
 from dotenv import load_dotenv
 
@@ -29,31 +29,34 @@ def fetchData():
     """Fetch the data from Nashville using API
 
     Returns:
-        data: list of dicts with following key
+        `data`: if succeed, list of dicts with following key
             incident_type_code,
             incident_type
             call_received,
             last_updated,
             address, city
+        `None`: if fails to fetch
     """
     url = f"https://data.nashville.gov/resource/qywv-8sc2.json?$$app_token={NASHVILLE_TOKEN}"
     response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-
-        # change datetime format
-        old_format = "%Y-%m-%dT%H:%M:%S.000"
-        new_format = "%m/%d/%Y %H:%M:%S %p"
-        for i in range(len(data)):
-            dt1 = data[i]["call_received"]
-            dt2 = data[i]["last_updated"]
-            data[i]["call_received"] = dt.strptime(dt1, old_format)
-            data[i]["last_updated"] = dt.strptime(dt2, old_format)
-            data[i]["call_received"] = dt1.strftime(new_format)
-            data[i]["last_updated"] = dt2.strftime(new_format)
-    else:
-        print(response.status_code)
+    if response.status_code != 200:
+        print(f'[{response.status_code}] error code occured')
         return None
+    
+    data = response.json()
+
+    # change datetime format
+    old_format = "%Y-%m-%dT%H:%M:%S.000"
+    new_format = "%m/%d/%Y %H:%M:%S %p"
+    for i in range(len(data)):
+        dt1 = data[i]["call_received"]
+        dt2 = data[i]["last_updated"]
+        # change to datetime
+        dt1 = dt.strptime(dt1, old_format)
+        dt2 = dt.strptime(dt2, old_format)
+        # change to string
+        data[i]["call_received"] = dt1.strftime(new_format)
+        data[i]["last_updated"] = dt2.strftime(new_format)
     return data
 
 
@@ -118,6 +121,11 @@ def tweet(api, row):
     print(text)
 
 
+def sleepFunc(mins=5):
+    print(f"sleeping for {mins} mins...")
+    sleep(mins*60)
+
+
 def main():
 
     sh = authGspread()
@@ -126,8 +134,8 @@ def main():
     while True:
         data = fetchData()
         if data is None:
-            sleep(5 * 60)
-            return False
+            sleepFunc(15)
+            continue
 
         worksheet = sh.get_worksheet(0)
         records = [worksheet.col_values(3)[1:], worksheet.col_values(5)[1:]]
@@ -138,8 +146,7 @@ def main():
                 worksheet.append_row(list(row.values()))
                 tweet(api, row)
 
-        print("sleeping for 5 mins...")
-        sleep(5 * 60)
+        sleepFunc()
 
 
 if __name__ == "__main__":
