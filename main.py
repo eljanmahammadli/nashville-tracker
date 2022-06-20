@@ -1,18 +1,18 @@
 
 import requests
-import pandas as pd
 import tweepy
 import gspread
 from os import environ
 from time import sleep
+from datetime import datetime as dt
 from dotenv import load_dotenv
 
 load_dotenv()
 
-pd.set_option('display.max_rows', None)
-pd.set_option('display.max_columns', None)
-pd.set_option('display.width', None)
-pd.set_option('display.max_colwidth', None)
+# pd.set_option('display.max_rows', None)
+# pd.set_option('display.max_columns', None)
+# pd.set_option('display.width', None)
+# pd.set_option('display.max_colwidth', None)
 
 NASHVILLE_TOKEN = environ['NASHVILLE_TOKEN']
 CONSUMER_KEY = environ['CONSUMER_KEY']
@@ -36,7 +36,13 @@ def fetchData():
     url = f'https://data.nashville.gov/resource/qywv-8sc2.json?$$app_token={NASHVILLE_TOKEN}'
     response = requests.get(url)
     if response.status_code == 200:
-        data = pd.DataFrame(response.json())
+        data = response.json()
+
+        for i in range(len(data)):
+            data[i]['call_received'] = dt.strptime(data[i]['call_received'], '%Y-%m-%dT%H:%M:%S.000')
+            data[i]['call_received'] = data[i]['call_received'].strftime('%m/%d/%Y %H:%M:%S %p')
+            data[i]['last_updated'] = dt.strptime(data[i]['last_updated'], '%Y-%m-%dT%H:%M:%S.000')
+            data[i]['last_updated'] = data[i]['last_updated'].strftime('%m/%d/%Y %H:%M:%S %p')
     else:
         print(response.status_code)
         return None
@@ -112,7 +118,7 @@ def main():
         worksheet = sh.get_worksheet(0)
         records = [worksheet.col_values(3)[1:], worksheet.col_values(5)[1:]]
 
-        for row in data.to_dict('records'):
+        for row in data:
             check = notinDb(records, row['call_received'], row['address'])
             if check is True:
                 worksheet.append_row(list(row.values()))
